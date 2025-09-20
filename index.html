@@ -1,238 +1,489 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>نظام باركود الحضور</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>نظام باركود الحضور - مصحح</title>
+<!-- JsBarcode -->
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <style>
-body {font-family: Tahoma, sans-serif; background:#f5f7fb; margin:0; padding:20px; color:#111;}
-.container {max-width:1000px; margin:auto; background:#fff; padding:20px; border-radius:12px; box-shadow:0 6px 24px rgba(8,20,40,0.08);}
-h1 {margin:0 0 10px;}
-.card {background:#fbfdff; padding:15px; border-radius:10px; border:1px solid #eef4ff; margin-bottom:15px;}
-label {display:block; margin-bottom:5px; font-weight:600;}
-input, button, select {width:100%; padding:10px; border-radius:8px; border:1px solid #d9e6ff; margin-bottom:8px; box-sizing:border-box;}
-button {background:#0b84ff; color:#fff; border:none; cursor:pointer;}
-button.btn-ghost {background:transparent; color:#0b84ff; border:1px solid rgba(11,132,255,0.2);}
-.row {display:flex; gap:10px; flex-wrap:wrap;}
-.row button {flex:1;}
-.employee-card {border-radius:10px; padding:12px; margin-bottom:8px; color:#fff; display:flex; justify-content:space-between; align-items:center;}
-.present {background:#4caf50;}
-.absent {background:#ff9800;}
-.barcode-preview {text-align:center; margin-top:10px;}
-svg {height:100px;}
-#reader {width:100%; min-height:200px; background:#fafafa; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-top:10px;}
+:root{--accent:#0b84ff;--muted:#667;--ok:#2ea44f;--absent:#ff9800;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;padding:18px;font-family:Tahoma,Arial,sans-serif;background:#f5f7fb;color:#14202b}
+.container{max-width:1100px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+h1{margin:0;font-size:20px}
+.card{background:var(--card);border-radius:12px;padding:14px;border:1px solid #e8f0ff;box-shadow:0 6px 18px rgba(8,20,40,0.04);margin-bottom:12px}
+label{display:block;margin-bottom:6px;font-weight:700}
+input,select,button{font-size:14px;padding:10px;border-radius:8px;border:1px solid #dbeafc;background:#fff}
+input{width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row> *{flex:1}
+button{cursor:pointer;background:var(--accent);color:#fff;border:none;border-radius:8px}
+.btn-ghost{background:transparent;color:var(--accent);border:1px solid rgba(11,132,255,0.12)}
+small{color:var(--muted)}
+.search-box{position:relative;margin-bottom:8px}
+.search-box input{padding-right:36px}
+.search-box .icon{position:absolute;top:50%;right:10px;transform:translateY(-50%);pointer-events:none;color:var(--muted)}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:8px;text-align:right;border-bottom:1px solid #eef6ff;font-size:13px}
+.actions{display:flex;gap:8px}
+.status{margin-top:8px;color:var(--muted);min-height:20px}
+.attendance-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:10px}
+.card-att{padding:12px;border-radius:10px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+.present{background:var(--ok)}
+.absent{background:var(--absent)}
+.barcode-preview{text-align:center}
+svg{max-width:100%;height:96px}
+#reader{width:100%;min-height:180px;border-radius:8px;background:#fafafa;display:flex;align-items:center;justify-content:center;margin-top:8px}
+@media (max-width:900px){.header{flex-direction:column;align-items:flex-start}}
 </style>
 </head>
 <body>
 <div class="container">
-<h1>نظام باركود الحضور</h1>
-<small>برمجة: المهندس سيف وسيم</small>
+  <div class="header">
+    <div>
+      <h1>نظام باركود الحضور</h1>
+      <small>من برمجة: المهندس سيف وسيم</small>
+    </div>
+    <div class="status" id="globalNote">افتح عبر HTTPS (GitHub Pages) أو localhost لتشغيل الكاميرا</div>
+  </div>
 
-<div class="card">
-<h3>إضافة موظف</h3>
-<label>اسم الموظف</label>
-<input id="empName" placeholder="مثال: محمد علي">
-<label>كود الموظف (فارغ لإنشاء تلقائي)</label>
-<input id="empCode" placeholder="سيتم إنشاؤه تلقائياً إذا تركت الحقل فارغ">
-<div class="row">
-<button id="addEmp">إضافة / حفظ</button>
-<button id="clearForm" class="btn-ghost">مسح النموذج</button>
-</div>
-<div class="barcode-preview">
-<svg id="barcode"></svg>
-<div id="barcodeLabel"></div>
-<div class="row">
-<button id="printBarcode">طباعة الباركود</button>
-<button id="downloadPng" class="btn-ghost">تحميل الباركود كصورة</button>
-</div>
-</div>
-</div>
+  <!-- إدارة الموظفين -->
+  <div class="card">
+    <h3>إضافة / تعديل موظف</h3>
+    <label>اسم الموظف</label>
+    <input id="empName" placeholder="مثال: أحمد علي">
+    <label style="margin-top:8px">كود الموظف (اتركه فارغًا ليُنشأ تلقائياً)</label>
+    <input id="empCode" placeholder="EMP0001">
+    <div class="row" style="margin-top:8px">
+      <button id="addEmp">إضافة / حفظ</button>
+      <button id="clearForm" class="btn-ghost">مسح الحقول</button>
+      <button id="showAll" class="btn-ghost">إظهار الكل</button>
+    </div>
 
-<div class="card">
-<h3>بحث الموظفين</h3>
-<input type="text" id="searchInput" placeholder="ابحث بالاسم أو الباركود">
-<div id="employeesList"></div>
-</div>
+    <hr style="margin:12px 0;border:none;border-top:1px solid #eef6ff">
 
-<div class="card">
-<h3>تسجيل الحضور</h3>
-<label>ابحث باسم أو باركود الموظف:</label>
-<input id="attendanceInput" placeholder="اكتب الاسم أو الكود">
-<label>اختر التاريخ:</label>
-<input type="date" id="attendanceDate" value="">
-<div class="row">
-<button id="registerAttendance">تسجيل الحضور</button>
-<button id="printLog" class="btn-ghost">طباعة السجل</button>
-</div>
-<div id="reader">الكاميرا غير متوفرة في الوضع المحلي</div>
-<div id="scanStatus"></div>
-</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div style="flex:1">
+        <label>بحث الموظفين</label>
+        <div class="search-box">
+          <input id="empSearch" placeholder="ابحث بالاسم أو الكود">
+          <span class="icon">🔍</span>
+        </div>
+      </div>
+      <div style="min-width:180px">
+        <label>معاينة باركود</label>
+        <div class="barcode-preview">
+          <svg id="barcode" xmlns="http://www.w3.org/2000/svg"></svg>
+          <div id="barcodeLabel" style="color:var(--muted);margin-top:6px"></div>
+          <div class="row" style="margin-top:8px">
+            <button id="printBarcode">طباعة باركود</button>
+            <button id="downloadPng" class="btn-ghost">حفظ كصورة</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<div class="card">
-<h3>سجل الحضور</h3>
-<input id="searchLog" placeholder="ابحث داخل سجل الحضور بالاسم أو الكود">
-<div id="attendanceLog"></div>
+  <!-- تسجيل الحضور -->
+  <div class="card">
+    <h3>تسجيل الحضور</h3>
+    <label>ابحث أو الصق/امسح الباركود (بحث حي)</label>
+    <div class="search-box">
+      <input id="quickSearch" placeholder="اكتب اسم الموظف أو الصق الكود هنا">
+      <span class="icon">🔍</span>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <div style="flex:1">
+        <label>أدخل الباركود يدوياً (أو استخدم قارئ خارجي)</label>
+        <input id="manualCode" placeholder="اضغط Enter لتسجيل">
+      </div>
+      <div style="width:180px">
+        <label>اختيار التاريخ</label>
+        <input type="date" id="datePicker">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <button id="registerBtn">تسجيل الآن</button>
+      <button id="startScan" class="btn-ghost">تشغيل الكاميرا</button>
+      <button id="stopScan" class="btn-ghost" disabled>إيقاف الكاميرا</button>
+    </div>
+    <div id="reader">الماسح (اضغط تشغيل الكاميرا)</div>
+    <div id="scanStatus" class="status"></div>
+    <div style="margin-top:10px" class="row">
+      <button id="printLog" class="btn-ghost">طباعة تقرير اليوم</button>
+      <button id="exportCsv" class="btn-ghost">تنزيل CSV</button>
+    </div>
+  </div>
+
+  <!-- سجل الحضور -->
+  <div class="card">
+    <h3>سجل الحضور (تصفح حسب التاريخ)</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div style="flex:1">
+        <input id="logSearch" placeholder="ابحث في السجل بالاسم أو الكود">
+      </div>
+      <div style="min-width:200px">
+        <select id="historyDates" style="width:100%;padding:10px;border-radius:8px;border:1px solid #dbeafc"></select>
+      </div>
+    </div>
+
+    <div id="attendanceCards" class="attendance-grid" style="margin-top:10px"></div>
+  </div>
+
+  <div style="height:30px"></div>
 </div>
 
 <script>
-const LS_EMP = 'att_employees_v1';
-const LS_LOG = 'att_log_v1';
+/* ---------- Keys & storage ---------- */
+const LS_EMP = 'att_employees_fixed_v1';
+const LS_COUNTER = 'att_emp_counter_v1';
+const LS_DAILY = 'att_daily_v1';
 
-function loadEmployees(){try{return JSON.parse(localStorage.getItem(LS_EMP)||'[]')}catch(e){return[]}}
-function saveEmployees(list){localStorage.setItem(LS_EMP,JSON.stringify(list))}
-function loadLog(){try{return JSON.parse(localStorage.getItem(LS_LOG)||'[]')}catch(e){return[]}}
-function saveLog(list){localStorage.setItem(LS_LOG,JSON.stringify(list))}
-function uid(){return 'EMP';} // باركود موحد لكل الموظفين
+function loadJSON(k, def){ try{ return JSON.parse(localStorage.getItem(k) || 'null') || def }catch(e){ return def } }
+function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)) }
 
-const empName=document.getElementById('empName');
-const empCode=document.getElementById('empCode');
-const addEmp=document.getElementById('addEmp');
-const clearForm=document.getElementById('clearForm');
-const employeesList=document.getElementById('employeesList');
-const searchInput=document.getElementById('searchInput');
-const attendanceInput=document.getElementById('attendanceInput');
-const registerAttendanceBtn=document.getElementById('registerAttendance');
-const printLogBtn=document.getElementById('printLog');
-const barcodeSvg=document.getElementById('barcode');
-const barcodeLabel=document.getElementById('barcodeLabel');
-const printBarcode=document.getElementById('printBarcode');
-const downloadPng=document.getElementById('downloadPng');
-const attendanceLog=document.getElementById('attendanceLog');
-const scanStatus=document.getElementById('scanStatus');
-const attendanceDate=document.getElementById('attendanceDate');
-const searchLog=document.getElementById('searchLog');
+/* employees: [{name, code}] , daily: { 'YYYY-MM-DD': [ {code,name,timeIso,displayTime} ] } */
+let employees = loadJSON(LS_EMP, []);
+let empCounter = Number(localStorage.getItem(LS_COUNTER) || 0);
+let daily = loadJSON(LS_DAILY, {});
 
-let employees=loadEmployees();
-let log=loadLog();
-let editingCode=null;
+/* ensure today's array exists */
+function todayKey(){ return (new Date()).toISOString().slice(0,10) }
+if(!daily[todayKey()]) { daily[todayKey()] = []; saveJSON(LS_DAILY, daily); }
 
-// Render employees
-function renderEmployees(filter=''){
-    employeesList.innerHTML='';
-    let filtered=employees.filter(e=>e.name.includes(filter)||e.code.includes(filter));
-    if(!filtered.length){ employeesList.innerHTML='<small>لا يوجد موظفين</small>'; return;}
-    filtered.forEach(e=>{
-        let div=document.createElement('div');
-        div.className='employee-card absent';
-        div.id='emp_'+e.code;
-        div.innerHTML=`<span>${e.name} — ${e.code}</span>
-        <span>
-        <button data-action="edit" data-code="${e.code}" class="btn-ghost">تعديل</button>
-        <button data-action="del" data-code="${e.code}" class="btn-ghost">حذف</button>
-        </span>`;
-        employeesList.appendChild(div);
-    });
+/* ---------- helpers ---------- */
+function pad(n, len=4){ return String(n).padStart(len, '0') }
+function nextCode(){
+  // generate EMP0001 style unique code
+  empCounter = (empCounter || 0) + 1;
+  localStorage.setItem(LS_COUNTER, String(empCounter));
+  const candidate = 'EMP' + pad(empCounter,4);
+  // ensure uniqueness (very unlikely to clash)
+  if(employees.find(e => e.code === candidate)) return nextCode();
+  return candidate;
+}
+function esc(s){ if(s===null||s===undefined) return ''; return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+function saveAll(){ saveJSON(LS_EMP, employees); saveJSON(LS_DAILY, daily); }
+
+/* ---------- DOM refs ---------- */
+const empName = document.getElementById('empName');
+const empCode = document.getElementById('empCode');
+const addEmp = document.getElementById('addEmp');
+const clearForm = document.getElementById('clearForm');
+const showAll = document.getElementById('showAll');
+const empSearch = document.getElementById('empSearch');
+const barcodeSvg = document.getElementById('barcode');
+const barcodeLabel = document.getElementById('barcodeLabel');
+const printBarcode = document.getElementById('printBarcode');
+const downloadPng = document.getElementById('downloadPng');
+
+const quickSearch = document.getElementById('quickSearch');
+const manualCode = document.getElementById('manualCode');
+const datePicker = document.getElementById('datePicker');
+const registerBtn = document.getElementById('registerBtn');
+const startScan = document.getElementById('startScan');
+const stopScan = document.getElementById('stopScan');
+const readerEl = document.getElementById('reader');
+const scanStatus = document.getElementById('scanStatus');
+const printLog = document.getElementById('printLog');
+const exportCsv = document.getElementById('exportCsv');
+
+const historyDates = document.getElementById('historyDates');
+const logSearch = document.getElementById('logSearch');
+const attendanceCards = document.getElementById('attendanceCards');
+
+const employeesListContainer = document.getElementById('empSearch'); // reuse input for search placeholder
+
+/* ---------- render employees list (simple) ---------- */
+function renderEmployeesList(filter=''){
+  // we will not use huge table here; search filters employees and showing via console? we will keep simple: do nothing heavy
+  // For quick UI feedback: when typing in empSearch, we still update barcode preview if exact match
+  // (full management of table was earlier — keep minimal as user wants)
+  // We'll show match in barcode preview when exact code or name found
+  const q = (filter||'').trim().toLowerCase();
+  const found = employees.find(e => e.code.toLowerCase() === q || e.name.toLowerCase() === q);
+  if(found) showBarcode(found.code, found.name);
 }
 
-// Render attendance log
-function renderLog(filter=''){
-    attendanceLog.innerHTML='';
-    let date = attendanceDate.value ? new Date(attendanceDate.value) : new Date();
-    let dateStr = date.toDateString();
-    employees.forEach(emp=>{
-        if(filter && !emp.name.includes(filter) && !emp.code.includes(filter)) return;
-        let present = log.find(l=>l.code===emp.code && new Date(l.timeIso).toDateString()===dateStr);
-        let div=document.createElement('div');
-        div.className='employee-card '+(present?'present':'absent');
-        div.innerHTML=`<span>${emp.name} — ${emp.code}</span><span>${present?'حضر':'غائب'}</span>`;
-        attendanceLog.appendChild(div);
-    });
+/* ---------- attendance (daily) ---------- */
+function ensureDateKey(k){
+  if(!daily[k]) daily[k] = [];
+}
+function registerAttendance(codeOrName, forDateKey){
+  const key = forDateKey || (datePicker.value || todayKey());
+  ensureDateKey(key);
+  const now = new Date();
+  let emp = employees.find(e=> e.code === codeOrName || e.name === codeOrName);
+  if(!emp) return {ok:false, msg:'الموظف غير موجود'};
+  // prevent duplicate
+  if(daily[key].find(x => x.code === emp.code)) return {ok:false, msg:'تم تسجيل حضور هذا الموظف لهذا اليوم سابقاً'};
+  daily[key].push({ code: emp.code, name: emp.name, timeIso: now.toISOString(), displayTime: now.toLocaleString('ar-EG')});
+  saveAll();
+  return {ok:true, emp:emp};
 }
 
-// Barcode preview
+/* ---------- render attendance cards for selected date ---------- */
+function refreshHistoryDates(){
+  const keys = Object.keys(daily).sort((a,b)=> b.localeCompare(a)); // recent first
+  historyDates.innerHTML = '';
+  keys.forEach(k=>{
+    const opt = document.createElement('option'); opt.value = k;
+    const [y,m,d] = k.split('-'); opt.textContent = d + '/' + m + '/' + y;
+    historyDates.appendChild(opt);
+  });
+  if(keys.length) historyDates.value = todayKey();
+}
+function renderAttendanceFor(key, filter=''){
+  attendanceCards.innerHTML = '';
+  ensureDateKey(key);
+  // build map of present
+  const presentMap = {};
+  daily[key].forEach(x => presentMap[x.code] = x);
+  // render each employee as card
+  employees.forEach(emp => {
+    if(filter){
+      const q = filter.toLowerCase();
+      if(!(emp.name.toLowerCase().includes(q) || emp.code.toLowerCase().includes(q))) return;
+    }
+    const div = document.createElement('div'); div.className = 'card-att ' + (presentMap[emp.code] ? 'present' : 'absent');
+    div.innerHTML = `<div>${esc(emp.name)}<div style="font-size:12px;color:rgba(255,255,255,0.9);margin-top:6px">${esc(emp.code)}</div></div>
+                     <div style="font-weight:700">${presentMap[emp.code] ? 'حاضر' : 'غائب'}</div>`;
+    attendanceCards.appendChild(div);
+  });
+}
+
+/* ---------- barcode preview ---------- */
 function showBarcode(code,name){
-    JsBarcode(barcodeSvg,code,{format:'CODE128',displayValue:true,fontSize:14,height:60,width:2});
-    barcodeLabel.innerText = name+' — '+code;
+  try{
+    JsBarcode(barcodeSvg, code, {format:'CODE128', displayValue:true, fontSize:14, height:60});
+    barcodeLabel.innerText = name + ' — ' + code;
+  }catch(e){ console.error(e); }
 }
 
-// Events
-addEmp.addEventListener('click',()=>{
-    let n=empName.value.trim();
-    let c=empCode.value.trim()||uid();
-    if(!n){alert('ادخل اسم الموظف'); return;}
-    if(editingCode){
-        employees = employees.map(e=>e.code===editingCode? {name:n,code:c}:e);
-        editingCode=null;
-        addEmp.innerText='إضافة / حفظ';
+/* ---------- UI events: employees add/edit ---------- */
+let editingCode = null;
+document.getElementById('addEmp').addEventListener('click', ()=>{
+  const name = empName.value.trim();
+  let code = empCode.value.trim();
+  if(!name){ alert('ادخل اسم الموظف'); return; }
+  if(!code) {
+    // generate sequential code
+    code = nextCode();
+  }
+  // if editing
+  if(editingCode){
+    // if changing code to one that exists (and different) -> error
+    if(code !== editingCode && employees.find(e => e.code === code)){ alert('هذا الكود مستخدم مسبقًا'); return; }
+    employees = employees.map(e => e.code === editingCode ? { name, code } : e);
+    editingCode = null; addEmp.innerText = 'إضافة / حفظ';
+  } else {
+    // add new (check duplicate)
+    if(employees.find(e => e.code === code)){ alert('هذا الكود موجود مسبقاً'); return; }
+    employees.push({ name, code });
+  }
+  saveAll();
+  empName.value=''; empCode.value='';
+  refreshHistoryDates();
+  renderAttendanceFor(historyDates.value || todayKey());
+  showBarcode(code, name);
+  scanStatus.innerText = 'تم حفظ الموظف';
+});
+
+/* clear fields */
+clearForm.addEventListener('click', ()=>{ empName.value=''; empCode.value=''; editingCode=null; addEmp.innerText='إضافة / حفظ'; barcodeSvg.innerHTML=''; barcodeLabel.innerText=''; });
+
+/* show all (reset filters) */
+showAll.addEventListener('click', ()=>{ empSearch.value=''; quickSearch.value=''; manualCode.value=''; renderAttendanceFor(historyDates.value || todayKey()); scanStatus.innerText=''; });
+
+/* support clicking an employee card to edit? We'll provide quickSearch suggestions via typing. */
+
+/* ---------- quick search & manual input ---------- */
+empSearch.addEventListener('input', ()=>{ renderEmployeesList(empSearch.value); });
+quickSearch.addEventListener('input', ()=>{ // live filter the attendance cards visually
+  renderAttendanceFor(historyDates.value || todayKey(), quickSearch.value);
+});
+manualCode.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    const v = manualCode.value.trim();
+    if(!v) return;
+    const res = registerAttendance(v, historyDates.value || datePicker.value || todayKey());
+    if(res.ok){ scanStatus.innerText = `تم تسجيل حضور ${res.emp.name}`; renderAttendanceFor(historyDates.value || todayKey()); }
+    else scanStatus.innerText = res.msg;
+    manualCode.value = '';
+  }
+});
+
+/* ---------- date picker & history ---------- */
+datePicker.value = todayKey();
+historyDates.addEventListener('change', ()=>{ renderAttendanceFor(historyDates.value || todayKey()); });
+// sync datePicker when historyDates changed
+historyDates.addEventListener('change', ()=>{ datePicker.value = historyDates.value; });
+
+/* populate history dates and render */
+function initHistory(){ refreshHistoryDates(); if(historyDates.options.length) { historyDates.value = todayKey(); datePicker.value = todayKey(); renderAttendanceFor(historyDates.value); } }
+initHistory();
+
+/* ---------- print / export ---------- */
+printBarcode.addEventListener('click', ()=>{
+  if(!barcodeSvg.innerHTML){ alert('اختر موظفاً أولاً أو ادخل كود في البحث لتوليد الباركود'); return; }
+  const w = window.open('','_blank');
+  const svgHtml = barcodeSvg.outerHTML;
+  const label = barcodeLabel.innerText;
+  w.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>طباعة باركود</title><style>@page{size:A4;margin:20mm}body{font-family:Tahoma;text-align:center;padding:20mm}</style></head><body><h2>${label}</h2>${svgHtml}<div style="margin-top:20px;font-size:12px;color:#444">من برمجة: المهندس سيف وسيم</div></body></html>`);
+  w.document.close(); w.print();
+});
+downloadPng.addEventListener('click', ()=>{ printBarcode.click(); });
+
+printLog.addEventListener('click', ()=>{
+  const key = historyDates.value || todayKey();
+  const dayLog = daily[key] || [];
+  const w = window.open('','_blank');
+  let html = `<html dir="rtl"><head><meta charset="utf-8"><title>تقرير ${key}</title><style>@page{size:A4;margin:20mm}body{font-family:Tahoma;padding:10mm}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right}th{background:#f5f5f5}</style></head><body><h2>تقرير الحضور - ${key}</h2><table><thead><tr><th>الاسم</th><th>الكود</th><th>الوقت</th></tr></thead><tbody>`;
+  // use employees order
+  employees.forEach(emp => {
+    const rec = dayLog.find(x=>x.code===emp.code);
+    html += `<tr><td>${esc(emp.name)}</td><td>${esc(emp.code)}</td><td>${rec ? esc(rec.displayTime) : 'غائب'}</td></tr>`;
+  });
+  html += '</tbody></table><div style="margin-top:10px;color:#444">من برمجة: المهندس سيف وسيم</div></body></html>';
+  w.document.write(html); w.document.close(); w.print();
+});
+
+exportCsv.addEventListener('click', ()=>{
+  const key = historyDates.value || todayKey();
+  const dayLog = daily[key] || [];
+  if(!dayLog.length){ alert('لا يوجد سجلات لهذا التاريخ'); return; }
+  const rows = [['name','code','time'], ...dayLog.map(r=>[r.name,r.code,r.displayTime])];
+  const csv = rows.map(r=> r.map(c=> `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `attendance_${(historyDates.value||todayKey())}.csv`; document.body.appendChild(a); a.click(); a.remove();
+});
+
+/* ---------- camera (Html5Qrcode) ---------- */
+let html5QrScanner = null;
+let lastScan = { value: null, t:0 };
+
+function isSecureOrLocal(){
+  try{
+    if(location.protocol === 'https:') return true;
+    if(location.hostname === 'localhost' || location.hostname === '127.0.0.1') return true;
+    return false;
+  }catch(e){ return false; }
+}
+
+function loadHtml5Qrcode(){
+  if(window.Html5Qrcode) return Promise.resolve();
+  return new Promise((res, rej)=>{
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js';
+    s.onload = ()=> res();
+    s.onerror = ()=> rej(new Error('فشل تحميل مكتبة الماسح'));
+    document.head.appendChild(s);
+  });
+}
+
+startScan.addEventListener('click', async ()=>{
+  scanStatus.innerText = '';
+  if(!isSecureOrLocal()){ scanStatus.innerText = 'الكاميرا غير متاحة هنا — افتح عبر HTTPS أو localhost'; return; }
+  try{
+    await loadHtml5Qrcode();
+  }catch(err){
+    scanStatus.innerText = 'تعذّر تحميل مكتبة الماسح; تأكد من اتصال الإنترنت';
+    console.error(err);
+    return;
+  }
+  if(html5QrScanner){ scanStatus.innerText = 'الماسح يعمل بالفعل'; return; }
+  html5QrScanner = new Html5Qrcode("reader");
+  startScan.disabled = true; stopScan.disabled = false;
+  try{
+    await html5QrScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (decoded) => {
+        const now = Date.now();
+        if(decoded === lastScan.value && (now - lastScan.t) < 1500) return; // ignore rapid duplicates
+        lastScan = { value: decoded, t: now };
+        // register (trim)
+        registerAttendance(decoded.trim(), historyDates.value || datePicker.value || todayKey());
+        scanStatus.innerText = `تم تسجيل: ${decoded.trim()}`;
+        // refresh UI
+        renderAttendanceFor(historyDates.value || todayKey(), logSearch.value);
+      },
+      (err) => {}
+    );
+    scanStatus.innerText = 'الماسح يعمل — صوب الباركود نحو الكاميرا';
+  }catch(e){
+    console.error(e);
+    scanStatus.innerText = 'فشل تشغيل الكاميرا. تأكد من منح الإذن ووجود كاميرا.';
+    html5QrScanner = null;
+    startScan.disabled = false; stopScan.disabled = true;
+  }
+});
+
+stopScan.addEventListener('click', ()=>{
+  if(!html5QrScanner){ scanStatus.innerText = 'الماسح متوقف'; return; }
+  html5QrScanner.stop().then(()=>{ html5QrScanner.clear(); html5QrScanner = null; scanStatus.innerText = 'تم إيقاف الماسح'; startScan.disabled = false; stopScan.disabled = true; document.getElementById('reader').innerText = 'الماسح'; }).catch(err => { console.error(err); scanStatus.innerText = 'فشل إيقاف الماسح'; html5QrScanner = null; startScan.disabled = false; stopScan.disabled = true; });
+});
+
+/* ---------- choose employee by quick search auto suggestions (simple) ---------- */
+quickSearch.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    const v = quickSearch.value.trim();
+    if(!v) return;
+    // if exact code or name match -> register
+    const emp = employees.find(x => x.code === v || x.name === v);
+    if(emp){
+      const res = registerAttendance(emp.code, historyDates.value || datePicker.value || todayKey());
+      if(res.ok){ scanStatus.innerText = `تم تسجيل حضور ${emp.name}`; renderAttendanceFor(historyDates.value || todayKey(), logSearch.value); }
+      else scanStatus.innerText = res.msg;
+      quickSearch.value = '';
     } else {
-        if(employees.find(x=>x.code===c)){ alert('الكود موجود مسبقاً'); return; }
-        employees.push({name:n, code:c});
+      // if a substring matches a single employee, pick it
+      const candidates = employees.filter(x => x.name.toLowerCase().includes(v.toLowerCase()) || x.code.toLowerCase().includes(v.toLowerCase()));
+      if(candidates.length === 1){
+        registerAttendance(candidates[0].code, historyDates.value || datePicker.value || todayKey());
+        scanStatus.innerText = `تم تسجيل حضور ${candidates[0].name}`;
+        quickSearch.value = '';
+        renderAttendanceFor(historyDates.value || todayKey(), logSearch.value);
+      } else {
+        scanStatus.innerText = 'لم يتم إيجاد تطابق وحيد؛ اكتب الكود الكامل أو اختر من القائمة';
+      }
     }
-    saveEmployees(employees);
-    empName.value=''; empCode.value='';
-    renderEmployees(searchInput.value);
-    renderLog();
-    showBarcode(c,n);
+  } else {
+    // live filter attendance cards view for easier find
+    renderAttendanceFor(historyDates.value || todayKey(), quickSearch.value);
+  }
 });
 
-clearForm.addEventListener('click',()=>{ empName.value=''; empCode.value=''; editingCode=null; addEmp.innerText='إضافة / حفظ'; barcodeSvg.innerHTML=''; barcodeLabel.innerText='';});
+/* ---------- search log live ---------- */
+logSearch.addEventListener('input', ()=>{ renderAttendanceFor(historyDates.value || todayKey(), logSearch.value); });
 
-employeesList.addEventListener('click',e=>{
-    let btn=e.target.closest('button'); if(!btn) return;
-    let action=btn.dataset.action; let code=btn.dataset.code;
-    if(action==='edit'){ let emp=employees.find(x=>x.code===code); empName.value=emp.name; empCode.value=emp.code; editingCode=emp.code; addEmp.innerText='حفظ'; }
-    else if(action==='del'){ if(!confirm('هل تريد حذف الموظف؟')) return; employees=employees.filter(x=>x.code!==code); saveEmployees(employees); renderEmployees(searchInput.value); renderLog();}
-});
-
-searchInput.addEventListener('input',()=>{ renderEmployees(searchInput.value); renderLog(searchLog.value); });
-searchLog.addEventListener('input',()=>{ renderLog(searchLog.value); });
-
-function registerAttendanceByCode(val){
-    if(!val) return;
-    let emp=employees.find(e=>e.code===val || e.name===val);
-    if(!emp){ scanStatus.innerText='الموظف غير موجود'; return; }
-    let date = attendanceDate.value ? new Date(attendanceDate.value) : new Date();
-    if(log.find(l=>l.code===emp.code && new Date(l.timeIso).toDateString()===date.toDateString())){
-        scanStatus.innerText='تم تسجيل حضور '+emp.name+' مسبقاً في هذا اليوم.';
-        return;
-    }
-    log.push({code:emp.code,name:emp.name,timeIso:date.toISOString()});
-    saveLog(log);
-    renderLog(searchLog.value);
-    scanStatus.innerText='تم تسجيل حضور '+emp.name;
-}
-
-registerAttendanceBtn.addEventListener('click',()=>{
-    registerAttendanceByCode(attendanceInput.value.trim());
-    attendanceInput.value='';
-});
-
-attendanceDate.addEventListener('change',()=>{ renderLog(searchLog.value); });
-
-// Print barcode
-printBarcode.addEventListener('click',()=>{
-    if(!barcodeSvg.innerHTML){ alert('اختر موظفاً أولاً'); return; }
-    let w=window.open('','_blank');
-    let html='<html dir="rtl"><head><meta charset="utf-8"><title>باركود الموظف</title><style>@page{size:A4;margin:20mm}body{text-align:center;font-family:Tahoma;padding:20mm}</style></head><body>';
-    html+='<h2>'+barcodeLabel.innerText+'</h2>';
-    html+=barcodeSvg.outerHTML;
-    html+='<div>برمجة: المهندس سيف وسيم</div></body></html>';
-    w.document.write(html); w.document.close(); w.print();
-});
-
-// Download PNG as print
-downloadPng.addEventListener('click',()=>{ printBarcode.click(); });
-
-// Print attendance log
-printLogBtn.addEventListener('click',()=>{
-    let w=window.open('','_blank');
-    let date = attendanceDate.value ? new Date(attendanceDate.value) : new Date();
-    let dateStr = date.toDateString();
-    let html='<html dir="rtl"><head><meta charset="utf-8"><title>تقرير الحضور</title><style>@page{size:A4;margin:20mm}body{font-family:Tahoma;padding:10mm}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right}th{background:#f5f5f5}</style></head><body>';
-    html+='<h2>تقرير الحضور ليوم '+dateStr+'</h2><table><thead><tr><th>الاسم</th><th>الكود</th><th>الحضور</th></tr></thead><tbody>';
-    employees.forEach(emp=>{
-        let present = log.find(l=>l.code===emp.code && new Date(l.timeIso).toDateString()===dateStr);
-        html+=`<tr><td>${emp.name}</td><td>${emp.code}</td><td>${present?'حضر':'غائب'}</td></tr>`;
+/* ---------- initialization ---------- */
+function boot(){
+  // ensure counter in sync with existing employees
+  if(!empCounter && employees.length){
+    // attempt to set counter from max existing EMP#### codes
+    let max = 0;
+    employees.forEach(e => {
+      const m = e.code.match(/^EMP0*([0-9]+)$/i);
+      if(m) max = Math.max(max, Number(m[1]));
     });
-    html+='</tbody></table></body></html>';
-    w.document.write(html); w.document.close(); w.print();
-});
+    empCounter = max;
+    localStorage.setItem(LS_COUNTER, String(empCounter));
+  }
+  refreshHistoryDates();
+  if(historyDates.options.length) historyDates.value = todayKey();
+  datePicker.value = todayKey();
+  renderAttendanceFor(historyDates.value || todayKey());
+  scanStatus.innerText = '';
+}
+boot();
 
-// Initialize
-renderEmployees();
-renderLog();
-attendanceDate.value = new Date().toISOString().slice(0,10);
+/* expose a way to click an employee to edit from cards? (not necessary now) */
+
 </script>
 </body>
 </html>
