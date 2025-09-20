@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام باركود الحضور</title>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<style>
+body {font-family: Tahoma, sans-serif; background:#f5f7fb; margin:0; padding:20px; color:#111;}
+.container {max-width:1000px; margin:auto; background:#fff; padding:20px; border-radius:12px; box-shadow:0 6px 24px rgba(8,20,40,0.08);}
+h1 {margin:0 0 10px;}
+.card {background:#fbfdff; padding:15px; border-radius:10px; border:1px solid #eef4ff; margin-bottom:15px;}
+label {display:block; margin-bottom:5px; font-weight:600;}
+input, button, select {width:100%; padding:10px; border-radius:8px; border:1px solid #d9e6ff; margin-bottom:8px; box-sizing:border-box;}
+button {background:#0b84ff; color:#fff; border:none; cursor:pointer;}
+button.btn-ghost {background:transparent; color:#0b84ff; border:1px solid rgba(11,132,255,0.2);}
+.row {display:flex; gap:10px; flex-wrap:wrap;}
+.row button {flex:1;}
+.employee-card {border-radius:10px; padding:12px; margin-bottom:8px; color:#fff; display:flex; justify-content:space-between; align-items:center;}
+.present {background:#4caf50;}
+.absent {background:#ff9800;}
+.barcode-preview {text-align:center; margin-top:10px;}
+svg {height:100px;}
+#reader {width:100%; min-height:200px; background:#fafafa; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>نظام باركود الحضور</h1>
+<small>برمجة: المهندس سيف وسيم</small>
+
+<div class="card">
+<h3>إضافة موظف</h3>
+<label>اسم الموظف</label>
+<input id="empName" placeholder="مثال: محمد علي">
+<label>كود الموظف (فارغ لإنشاء تلقائي)</label>
+<input id="empCode" placeholder="سيتم إنشاؤه تلقائياً إذا تركت الحقل فارغ">
+<div class="row">
+<button id="addEmp">إضافة / حفظ</button>
+<button id="clearForm" class="btn-ghost">مسح النموذج</button>
+</div>
+<div class="barcode-preview">
+<svg id="barcode"></svg>
+<div id="barcodeLabel"></div>
+<div class="row">
+<button id="printBarcode">طباعة الباركود</button>
+<button id="downloadPng" class="btn-ghost">تحميل الباركود كصورة</button>
+</div>
+</div>
+</div>
+
+<div class="card">
+<h3>بحث الموظفين</h3>
+<input type="text" id="searchInput" placeholder="ابحث بالاسم أو الباركود">
+<div id="employeesList"></div>
+</div>
+
+<div class="card">
+<h3>تسجيل الحضور</h3>
+<label>ابحث باسم أو باركود الموظف:</label>
+<input id="attendanceInput" placeholder="اكتب الاسم أو الكود">
+<label>اختر التاريخ:</label>
+<input type="date" id="attendanceDate" value="">
+<div class="row">
+<button id="registerAttendance">تسجيل الحضور</button>
+<button id="printLog" class="btn-ghost">طباعة السجل</button>
+</div>
+<div id="reader">الكاميرا غير متوفرة في الوضع المحلي</div>
+<div id="scanStatus"></div>
+</div>
+
+<div class="card">
+<h3>سجل الحضور</h3>
+<input id="searchLog" placeholder="ابحث داخل سجل الحضور بالاسم أو الكود">
+<div id="attendanceLog"></div>
+</div>
+
+<script>
+const LS_EMP = 'att_employees_v1';
+const LS_LOG = 'att_log_v1';
+
+function loadEmployees(){try{return JSON.parse(localStorage.getItem(LS_EMP)||'[]')}catch(e){return[]}}
+function saveEmployees(list){localStorage.setItem(LS_EMP,JSON.stringify(list))}
+function loadLog(){try{return JSON.parse(localStorage.getItem(LS_LOG)||'[]')}catch(e){return[]}}
+function saveLog(list){localStorage.setItem(LS_LOG,JSON.stringify(list))}
+function uid(){return 'EMP';} // باركود موحد لكل الموظفين
+
+const empName=document.getElementById('empName');
+const empCode=document.getElementById('empCode');
+const addEmp=document.getElementById('addEmp');
+const clearForm=document.getElementById('clearForm');
+const employeesList=document.getElementById('employeesList');
+const searchInput=document.getElementById('searchInput');
+const attendanceInput=document.getElementById('attendanceInput');
+const registerAttendanceBtn=document.getElementById('registerAttendance');
+const printLogBtn=document.getElementById('printLog');
+const barcodeSvg=document.getElementById('barcode');
+const barcodeLabel=document.getElementById('barcodeLabel');
+const printBarcode=document.getElementById('printBarcode');
+const downloadPng=document.getElementById('downloadPng');
+const attendanceLog=document.getElementById('attendanceLog');
+const scanStatus=document.getElementById('scanStatus');
+const attendanceDate=document.getElementById('attendanceDate');
+const searchLog=document.getElementById('searchLog');
+
+let employees=loadEmployees();
+let log=loadLog();
+let editingCode=null;
+
+// Render employees
+function renderEmployees(filter=''){
+    employeesList.innerHTML='';
+    let filtered=employees.filter(e=>e.name.includes(filter)||e.code.includes(filter));
+    if(!filtered.length){ employeesList.innerHTML='<small>لا يوجد موظفين</small>'; return;}
+    filtered.forEach(e=>{
+        let div=document.createElement('div');
+        div.className='employee-card absent';
+        div.id='emp_'+e.code;
+        div.innerHTML=`<span>${e.name} — ${e.code}</span>
+        <span>
+        <button data-action="edit" data-code="${e.code}" class="btn-ghost">تعديل</button>
+        <button data-action="del" data-code="${e.code}" class="btn-ghost">حذف</button>
+        </span>`;
+        employeesList.appendChild(div);
+    });
+}
+
+// Render attendance log
+function renderLog(filter=''){
+    attendanceLog.innerHTML='';
+    let date = attendanceDate.value ? new Date(attendanceDate.value) : new Date();
+    let dateStr = date.toDateString();
+    employees.forEach(emp=>{
+        if(filter && !emp.name.includes(filter) && !emp.code.includes(filter)) return;
+        let present = log.find(l=>l.code===emp.code && new Date(l.timeIso).toDateString()===dateStr);
+        let div=document.createElement('div');
+        div.className='employee-card '+(present?'present':'absent');
+        div.innerHTML=`<span>${emp.name} — ${emp.code}</span><span>${present?'حضر':'غائب'}</span>`;
+        attendanceLog.appendChild(div);
+    });
+}
+
+// Barcode preview
+function showBarcode(code,name){
+    JsBarcode(barcodeSvg,code,{format:'CODE128',displayValue:true,fontSize:14,height:60,width:2});
+    barcodeLabel.innerText = name+' — '+code;
+}
+
+// Events
+addEmp.addEventListener('click',()=>{
+    let n=empName.value.trim();
+    let c=empCode.value.trim()||uid();
+    if(!n){alert('ادخل اسم الموظف'); return;}
+    if(editingCode){
+        employees = employees.map(e=>e.code===editingCode? {name:n,code:c}:e);
+        editingCode=null;
+        addEmp.innerText='إضافة / حفظ';
+    } else {
+        if(employees.find(x=>x.code===c)){ alert('الكود موجود مسبقاً'); return; }
+        employees.push({name:n, code:c});
+    }
+    saveEmployees(employees);
+    empName.value=''; empCode.value='';
+    renderEmployees(searchInput.value);
+    renderLog();
+    showBarcode(c,n);
+});
+
+clearForm.addEventListener('click',()=>{ empName.value=''; empCode.value=''; editingCode=null; addEmp.innerText='إضافة / حفظ'; barcodeSvg.innerHTML=''; barcodeLabel.innerText='';});
+
+employeesList.addEventListener('click',e=>{
+    let btn=e.target.closest('button'); if(!btn) return;
+    let action=btn.dataset.action; let code=btn.dataset.code;
+    if(action==='edit'){ let emp=employees.find(x=>x.code===code); empName.value=emp.name; empCode.value=emp.code; editingCode=emp.code; addEmp.innerText='حفظ'; }
+    else if(action==='del'){ if(!confirm('هل تريد حذف الموظف؟')) return; employees=employees.filter(x=>x.code!==code); saveEmployees(employees); renderEmployees(searchInput.value); renderLog();}
+});
+
+searchInput.addEventListener('input',()=>{ renderEmployees(searchInput.value); renderLog(searchLog.value); });
+searchLog.addEventListener('input',()=>{ renderLog(searchLog.value); });
+
+function registerAttendanceByCode(val){
+    if(!val) return;
+    let emp=employees.find(e=>e.code===val || e.name===val);
+    if(!emp){ scanStatus.innerText='الموظف غير موجود'; return; }
+    let date = attendanceDate.value ? new Date(attendanceDate.value) : new Date();
+    if(log.find(l=>l.code===emp.code && new Date(l.timeIso).toDateString()===date.toDateString())){
+        scanStatus.innerText='تم تسجيل حضور '+emp.name+' مسبقاً في هذا اليوم.';
+        return;
+    }
+    log.push({code:emp.code,name:emp.name,timeIso:date.toISOString()});
+    saveLog(log);
+    renderLog(searchLog.value);
+    scanStatus.innerText='تم تسجيل حضور '+emp.name;
+}
+
+registerAttendanceBtn.addEventListener('click',()=>{
+    registerAttendanceByCode(attendanceInput.value.trim());
+    attendanceInput.value='';
+});
+
+attendanceDate.addEventListener('change',()=>{ renderLog(searchLog.value); });
+
+// Print barcode
+printBarcode.addEventListener('click',()=>{
+    if(!barcodeSvg.innerHTML){ alert('اختر موظفاً أولاً'); return; }
+    let w=window.open('','_blank');
+    let html='<html dir="rtl"><head><meta charset="utf-8"><title>باركود الموظف</title><style>@page{size:A4;margin:20mm}body{text-align:center;font-family:Tahoma;padding:20mm}</style></head><body>';
+    html+='<h2>'+barcodeLabel.innerText+'</h2>';
+    html+=barcodeSvg.outerHTML;
+    html+='<div>برمجة: المهندس سيف وسيم</div></body></html>';
+    w.document.write(html); w.document.close(); w.print();
+});
+
+// Download PNG as print
+downloadPng.addEventListener('click',()=>{ printBarcode.click(); });
+
+// Print attendance log
+printLogBtn.addEventListener('click',()=>{
+    let w=window.open('','_blank');
+    let date = attendanceDate.value ? new Date(attendanceDate.value) : new Date();
+    let dateStr = date.toDateString();
+    let html='<html dir="rtl"><head><meta charset="utf-8"><title>تقرير الحضور</title><style>@page{size:A4;margin:20mm}body{font-family:Tahoma;padding:10mm}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ddd;padding:8px;text-align:right}th{background:#f5f5f5}</style></head><body>';
+    html+='<h2>تقرير الحضور ليوم '+dateStr+'</h2><table><thead><tr><th>الاسم</th><th>الكود</th><th>الحضور</th></tr></thead><tbody>';
+    employees.forEach(emp=>{
+        let present = log.find(l=>l.code===emp.code && new Date(l.timeIso).toDateString()===dateStr);
+        html+=`<tr><td>${emp.name}</td><td>${emp.code}</td><td>${present?'حضر':'غائب'}</td></tr>`;
+    });
+    html+='</tbody></table></body></html>';
+    w.document.write(html); w.document.close(); w.print();
+});
+
+// Initialize
+renderEmployees();
+renderLog();
+attendanceDate.value = new Date().toISOString().slice(0,10);
+</script>
+</body>
+</html>
